@@ -1,8 +1,11 @@
 package co.cloudify.jenkins.plugin;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.ResourceBundle;
 
 import javax.servlet.ServletException;
 import javax.ws.rs.WebApplicationException;
@@ -38,12 +41,23 @@ import jenkins.model.Jenkins;
 public class CloudifyConfiguration extends GlobalConfiguration {
     private String host;
     private Boolean secured = Boolean.TRUE;
+    private Boolean trustAllCerts = Boolean.FALSE;
     private String defaultTenant;
+    private URL integrationBlueprintsArchiveUrl;
 
     @DataBoundConstructor
     public CloudifyConfiguration() {
         super();
         load();
+
+        if (integrationBlueprintsArchiveUrl == null) {
+            try {
+                integrationBlueprintsArchiveUrl = new URL(ResourceBundle.getBundle("default-configuration")
+                        .getString("integration.blueprints.archive.url"));
+            } catch (MalformedURLException ex) {
+                throw new RuntimeException("Failed retrieving location of integration bundle", ex);
+            }
+        }
     }
 
     public String getHost() {
@@ -66,6 +80,15 @@ public class CloudifyConfiguration extends GlobalConfiguration {
         save();
     }
 
+    public boolean isTrustAllCerts() {
+        return trustAllCerts;
+    }
+
+    @DataBoundSetter
+    public void setTrustAllCerts(boolean trustAllCerts) {
+        this.trustAllCerts = trustAllCerts;
+    }
+
     public String getDefaultTenant() {
         return defaultTenant;
     }
@@ -73,6 +96,16 @@ public class CloudifyConfiguration extends GlobalConfiguration {
     @DataBoundSetter
     public void setDefaultTenant(String tenant) {
         this.defaultTenant = tenant;
+        save();
+    }
+
+    public URL getIntegrationBlueprintsArchiveUrl() {
+        return integrationBlueprintsArchiveUrl;
+    }
+
+    @DataBoundSetter
+    public void setIntegrationBlueprintsArchiveUrl(URL integrationBlueprintsArchiveUrl) {
+        this.integrationBlueprintsArchiveUrl = integrationBlueprintsArchiveUrl;
         save();
     }
 

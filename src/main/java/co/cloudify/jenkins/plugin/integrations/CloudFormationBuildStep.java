@@ -1,12 +1,16 @@
 package co.cloudify.jenkins.plugin.integrations;
 
-import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.commons.collections.MapUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -16,10 +20,10 @@ import org.kohsuke.stapler.QueryParameter;
 import com.amazonaws.auth.AWSCredentials;
 import com.cloudbees.jenkins.plugins.awscredentials.AmazonWebServicesCredentials;
 
-import co.cloudify.jenkins.plugin.BlueprintUploadSpec;
 import co.cloudify.jenkins.plugin.CloudifyPluginUtilities;
 import co.cloudify.jenkins.plugin.Messages;
 import co.cloudify.rest.client.CloudifyClient;
+import hudson.AbortException;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
@@ -44,6 +48,10 @@ public class CloudFormationBuildStep extends IntegrationBuildStep {
     private String parametersAsString;
     private String parametersFile;
     private String templateUrl;
+    private String templateFile;
+    private String templateBucketName;
+    private String templateResourceName;
+    private String templateBody;
 
     @DataBoundConstructor
     public CloudFormationBuildStep() {
@@ -113,6 +121,42 @@ public class CloudFormationBuildStep extends IntegrationBuildStep {
         this.templateUrl = templateUrl;
     }
 
+    public String getTemplateFile() {
+        return templateFile;
+    }
+
+    @DataBoundSetter
+    public void setTemplateFile(String templateFile) {
+        this.templateFile = templateFile;
+    }
+
+    public String getTemplateBucketName() {
+        return templateBucketName;
+    }
+
+    @DataBoundSetter
+    public void setTemplateBucketName(String templateBucketName) {
+        this.templateBucketName = templateBucketName;
+    }
+
+    public String getTemplateResourceName() {
+        return templateResourceName;
+    }
+
+    @DataBoundSetter
+    public void setTemplateResourceName(String templateResourceName) {
+        this.templateResourceName = templateResourceName;
+    }
+
+    public String getTemplateBody() {
+        return templateBody;
+    }
+
+    @DataBoundSetter
+    public void setTemplateBody(String templateBody) {
+        this.templateBody = templateBody;
+    }
+
     @Override
     protected void performImpl(final Run<?, ?> run, final Launcher launcher, final TaskListener listener,
             final FilePath workspace,
@@ -124,6 +168,23 @@ public class CloudFormationBuildStep extends IntegrationBuildStep {
         String parametersAsString = CloudifyPluginUtilities.expandString(envVars, this.parametersAsString);
         String parametersFile = CloudifyPluginUtilities.expandString(envVars, this.parametersFile);
         String templateUrl = CloudifyPluginUtilities.expandString(envVars, this.templateUrl);
+        String templateFile = CloudifyPluginUtilities.expandString(envVars, this.templateFile);
+        String templateBucketName = CloudifyPluginUtilities.expandString(envVars, this.templateBucketName);
+        String templateResourceName = CloudifyPluginUtilities.expandString(envVars, this.templateResourceName);
+        String templateBody = CloudifyPluginUtilities.expandString(envVars, this.templateBody);
+
+        if (Arrays.asList(
+                templateUrl != null,
+                templateFile != null,
+                templateBucketName != null && templateResourceName != null,
+                templateBody != null).stream().filter(p -> p).count() != 1) {
+            throw new AbortException(
+                    String.format(
+                            "Template must be specified in exactly one of the following ways: by URL, by file name, "
+                                    + "by template body, or by a combination of bucket name and resource name. Provided values: "
+                                    + "url=%s, file=%s, bucket name=%s, resource name=%s, body=%s",
+                            templateUrl, templateFile, templateBucketName, templateResourceName, templateBody));
+        }
 
         Map<String, Object> parametersMap = CloudifyPluginUtilities.getCombinedMap(workspace, parametersFile,
                 parametersAsString,
@@ -142,28 +203,40 @@ public class CloudFormationBuildStep extends IntegrationBuildStep {
                 AmazonWebServicesCredentials.class, run);
         AWSCredentials awsCreds = awsCredentials.getCredentials();
 
+        Map<String, Object> resourceConfigKwargs = new HashMap<String, Object>();
+        Map<String, Object> resourceConfig = Collections.singletonMap("kwargs", resourceConfigKwargs);
+
         putIfNonNullValue(operationInputs, "aws_access_key_id", awsCreds.getAWSAccessKeyId());
         putIfNonNullValue(operationInputs, "aws_secret_access_key", awsCreds.getAWSSecretKey());
         putIfNonNullValue(operationInputs, "aws_region_name", regionName);
-        operationInputs.put("stack_name", stackName);
-        operationInputs.put("parameters", parametersAsList);
-        operationInputs.put("template_url", templateUrl);
+        putIfNonNullValue(operationInputs, "resource_config", resourceConfig);
+        putIfNonNullValue(resourceConfigKwargs, "StackName", stackName);
+        putIfNonNullValue(resourceConfigKwargs, "Parameters", parametersAsList);
+
+        if (templateUrl != null) {
+            resourceConfigKwargs.put("TemplateURL", templateUrl);
+        } else if (templateBucketName != null && templateResourceName != null) {
+            resourceConfigKwargs.put("TemplateURL", String.format(
+                    "https://%s.s3.amazonaws.com/%s", templateBucketName, templateResourceName));
+        } else {
+            String finalBody;
+            if (templateFile != null) {
+                try (InputStream is = workspace.child(templateFile).read()) {
+                    finalBody = IOUtils.toString(is, StandardCharsets.UTF_8);
+                }
+            } else if (templateBody != null) {
+                finalBody = templateBody;
+            } else {
+                throw new AbortException("Could not conclude CloudFormation template body");
+            }
+            resourceConfigKwargs.put("TemplateBody", finalBody);
+        }
         super.performImpl(run, launcher, listener, workspace, envVars, cloudifyClient);
     }
 
     @Override
     protected String getIntegrationName() {
         return "cloudformation";
-    }
-
-    @Override
-    protected String getIntegrationVersion() {
-        return "1.0";
-    }
-
-    @Override
-    protected BlueprintUploadSpec getBlueprintUploadSpec() throws IOException {
-        return new BlueprintUploadSpec("/blueprints/cfn/blueprint.yaml");
     }
 
     @Symbol("cfyCloudFormation")
@@ -196,6 +269,10 @@ public class CloudFormationBuildStep extends IntegrationBuildStep {
                 .append("regionName", regionName)
                 .append("stackName", stackName)
                 .append("templateUrl", templateUrl)
+                .append("templateFile", templateFile)
+                .append("templateBucketName", templateBucketName)
+                .append("templateResourceName", templateResourceName)
+                .append("templateBody", templateBody)
                 .append("parametersAsString", parametersAsString)
                 .append("parameters", parameters)
                 .append("parametersFile", parametersFile)

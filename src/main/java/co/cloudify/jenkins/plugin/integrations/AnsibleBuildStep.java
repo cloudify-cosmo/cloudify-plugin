@@ -1,6 +1,5 @@
 package co.cloudify.jenkins.plugin.integrations;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,7 +11,6 @@ import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
-import co.cloudify.jenkins.plugin.BlueprintUploadSpec;
 import co.cloudify.jenkins.plugin.CloudifyPluginUtilities;
 import co.cloudify.jenkins.plugin.Messages;
 import co.cloudify.rest.client.CloudifyClient;
@@ -259,16 +257,6 @@ public class AnsibleBuildStep extends IntegrationBuildStep {
     @Override
     protected String getIntegrationName() {
         return "ansible";
-    }
-
-    @Override
-    protected String getIntegrationVersion() {
-        return "1.0";
-    }
-
-    @Override
-    protected BlueprintUploadSpec getBlueprintUploadSpec() throws IOException {
-        return new BlueprintUploadSpec("/blueprints/ansible/blueprint.yaml");
     }
 
     @Symbol("cfyAnsible")

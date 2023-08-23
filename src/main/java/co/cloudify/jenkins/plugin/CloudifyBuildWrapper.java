@@ -209,7 +209,8 @@ public class CloudifyBuildWrapper extends SimpleBuildWrapper {
         CloudifyDisposer disposer = new CloudifyDisposer(credentialsId, tenant, debugOutput);
         context.setDisposer(disposer);
 
-        StandardUsernamePasswordCredentials creds = CloudifyPluginUtilities.getCredentials(credentialsId, build);
+        StandardUsernamePasswordCredentials creds = CloudifyPluginUtilities
+                .getUsernamePasswordCredentials(credentialsId, build);
         CloudifyClient client = CloudifyConfiguration.getCloudifyClient(creds, tenant);
         BlueprintsClient blueprintsClient = client.getBlueprintsClient();
         PrintStream logger = listener.getLogger();
@@ -220,30 +221,24 @@ public class CloudifyBuildWrapper extends SimpleBuildWrapper {
             blueprint = blueprintsClient.get(blueprintId);
         } else {
             if (blueprintArchiveUrl != null) {
-                logger.println(String.format(
-                        "Uploading blueprint '%s' from %s (main filename: %s)",
-                        blueprintId,
+                logger.println(String.format("Uploading blueprint '%s' from %s (main filename: %s)", blueprintId,
                         blueprintArchiveUrl, blueprintMainFile));
                 blueprint = blueprintsClient.upload(blueprintId, new URL(blueprintArchiveUrl), blueprintMainFile);
             } else {
                 FilePath rootFilePath = workspace.child(blueprintRootDirectory);
-                logger.println(String.format(
-                        "Uploading blueprint '%s' from %s (main filename: %s)",
-                        blueprintId,
+                logger.println(String.format("Uploading blueprint '%s' from %s (main filename: %s)", blueprintId,
                         rootFilePath, blueprintMainFile));
 
-                blueprint = rootFilePath.act(
-                        new BlueprintUploadDirFileCallable(
-                                blueprintsClient, blueprintId, blueprintMainFile));
+                blueprint = rootFilePath
+                        .act(new BlueprintUploadDirFileCallable(blueprintsClient, blueprintId, blueprintMainFile));
             }
             // This blueprint will need to be disposed of.
             disposer.setBlueprint(blueprint);
         }
 
-        CloudifyEnvironmentData envData = CloudifyPluginUtilities.createEnvironment(
-                listener, workspace, client, blueprint.getId(),
-                deploymentId, inputs, inputsLocation, null, null, outputsLocation, echoInputs, echoOutputs,
-                debugOutput);
+        CloudifyEnvironmentData envData = CloudifyPluginUtilities.createEnvironment(listener, workspace, client,
+                blueprint.getId(), deploymentId, inputs, inputsLocation, null, null, outputsLocation, false, echoInputs,
+                echoOutputs, debugOutput, x -> true);
 
         disposer.setDeployment(envData.getDeployment(), ignoreFailureOnTeardown);
         action.applyEnvironmentData(envData);
@@ -279,15 +274,14 @@ public class CloudifyBuildWrapper extends SimpleBuildWrapper {
         @Override
         public void tearDown(Run<?, ?> build, FilePath workspace, Launcher launcher, TaskListener listener)
                 throws IOException, InterruptedException {
-            StandardUsernamePasswordCredentials creds = CloudifyPluginUtilities.getCredentials(credentialsId, build);
+            StandardUsernamePasswordCredentials creds = CloudifyPluginUtilities
+                    .getUsernamePasswordCredentials(credentialsId, build);
             CloudifyClient client = CloudifyConfiguration.getCloudifyClient(creds, tenant);
             PrintStream logger = listener.getLogger();
 
             if (deployment != null) {
                 CloudifyPluginUtilities.deleteEnvironment(listener, client, deployment.getId(),
-                        DeploymentsHelper.DEFAULT_POLLING_INTERVAL,
-                        ignoreFailure,
-                        debugOutput);
+                        DeploymentsHelper.DEFAULT_POLLING_INTERVAL, false, ignoreFailure, debugOutput);
             }
 
             if (blueprint != null) {
@@ -310,12 +304,11 @@ public class CloudifyBuildWrapper extends SimpleBuildWrapper {
         }
 
         private FormValidation checkBlueprintParams(final String blueprintRootDirectory,
-                final String blueprintArchiveUrl,
-                final String blueprintMainFile) {
+                final String blueprintArchiveUrl, final String blueprintMainFile) {
             if (StringUtils.isNotBlank(blueprintMainFile) && StringUtils.isBlank(blueprintRootDirectory)
                     && StringUtils.isBlank(blueprintArchiveUrl)) {
-                return FormValidation
-                        .error("If blueprint's main file is populated, then either blueprint's root directory or archive URL must be specified at runtime");
+                return FormValidation.error(
+                        "If blueprint's main file is populated, then either blueprint's root directory or archive URL must be specified at runtime");
             }
             return FormValidation.ok();
         }
@@ -326,14 +319,12 @@ public class CloudifyBuildWrapper extends SimpleBuildWrapper {
         }
 
         public FormValidation doCheckBlueprintMainFile(@QueryParameter String value,
-                @QueryParameter String blueprintArchiveUrl,
-                @QueryParameter String blueprintRootDirectory) {
+                @QueryParameter String blueprintArchiveUrl, @QueryParameter String blueprintRootDirectory) {
             return checkBlueprintParams(blueprintRootDirectory, blueprintArchiveUrl, value);
         }
 
         public FormValidation doCheckBlueprintRootDirectory(@QueryParameter String value,
-                @QueryParameter String blueprintArchiveUrl,
-                @QueryParameter String blueprintMainFile) {
+                @QueryParameter String blueprintArchiveUrl, @QueryParameter String blueprintMainFile) {
             return checkBlueprintParams(value, blueprintArchiveUrl, blueprintMainFile);
         }
 
@@ -353,22 +344,13 @@ public class CloudifyBuildWrapper extends SimpleBuildWrapper {
 
     @Override
     public String toString() {
-        return new ToStringBuilder(this)
-                .appendSuper(super.toString())
-                .append("credentialsId", credentialsId)
-                .append("tenant", tenant)
-                .append("blueprintId", blueprintId)
-                .append("blueprintMainFile", blueprintMainFile)
-                .append("blueprintRootDirectory", blueprintRootDirectory)
-                .append("blueprintArchiveUrl", blueprintArchiveUrl)
-                .append("deploymentId", deploymentId)
-                .append("inputs", inputs)
-                .append("inputsLocation", inputsLocation)
-                .append("outputsLocation", outputsLocation)
-                .append("ignoreFailureOnTeardown", ignoreFailureOnTeardown)
-                .append("echoInputs", echoInputs)
-                .append("echoOutputs", echoOutputs)
-                .append("debugOutput", debugOutput)
+        return new ToStringBuilder(this).appendSuper(super.toString()).append("credentialsId", credentialsId)
+                .append("tenant", tenant).append("blueprintId", blueprintId)
+                .append("blueprintMainFile", blueprintMainFile).append("blueprintRootDirectory", blueprintRootDirectory)
+                .append("blueprintArchiveUrl", blueprintArchiveUrl).append("deploymentId", deploymentId)
+                .append("inputs", inputs).append("inputsLocation", inputsLocation)
+                .append("outputsLocation", outputsLocation).append("ignoreFailureOnTeardown", ignoreFailureOnTeardown)
+                .append("echoInputs", echoInputs).append("echoOutputs", echoOutputs).append("debugOutput", debugOutput)
                 .toString();
     }
 }

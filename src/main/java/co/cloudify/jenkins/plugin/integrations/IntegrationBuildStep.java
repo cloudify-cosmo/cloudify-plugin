@@ -3,12 +3,15 @@ package co.cloudify.jenkins.plugin.integrations;
 import java.io.PrintStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ResourceBundle;
+import java.util.function.Predicate;
 
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.kohsuke.stapler.DataBoundSetter;
 
 import co.cloudify.jenkins.plugin.BlueprintUploadSpec;
 import co.cloudify.jenkins.plugin.CloudifyBuildStep;
+import co.cloudify.jenkins.plugin.CloudifyConfiguration;
 import co.cloudify.jenkins.plugin.CloudifyPluginUtilities;
 import co.cloudify.rest.client.BlueprintsClient;
 import co.cloudify.rest.client.CloudifyClient;
@@ -32,6 +35,10 @@ public abstract class IntegrationBuildStep extends CloudifyBuildStep {
     private boolean debugOutput;
     protected String envDataLocation;
     protected Map<String, Object> operationInputs = new LinkedHashMap<String, Object>();
+    /** Predicate to determine whether an input should be printed out, or be masked. */
+    protected Predicate<String> inputPrintPredicate;
+
+    protected static final ResourceBundle INTEGRATION_BUNDLE = ResourceBundle.getBundle("integration");
 
     public boolean isEchoInputs() {
         return echoInputs;
@@ -78,7 +85,11 @@ public abstract class IntegrationBuildStep extends CloudifyBuildStep {
         this.deploymentId = deploymentId;
     }
 
-    protected abstract BlueprintUploadSpec getBlueprintUploadSpec() throws Exception;
+    protected BlueprintUploadSpec getBlueprintUploadSpec() throws Exception {
+        return new BlueprintUploadSpec(
+                CloudifyConfiguration.get().getIntegrationBlueprintsArchiveUrl(),
+                INTEGRATION_BUNDLE.getString(String.format("integration.%s.blueprint-file", getIntegrationName())));
+    }
 
     @Override
     protected void performImpl(Run<?, ?> run, Launcher launcher, TaskListener listener, FilePath workspace,
@@ -94,20 +105,20 @@ public abstract class IntegrationBuildStep extends CloudifyBuildStep {
             logger.println(String.format("Loading blueprint: %s", blueprintId));
             blueprint = blueprintsClient.get(blueprintId);
         } catch (BlueprintNotFoundException ex) {
-            logger.println(String.format("Blueprint '%s' doesn't exist; uploading it...", blueprintId));
+            logger.println(String.format("Blueprint '%s' doesn't exist; will try to upload it", blueprintId));
             try (BlueprintUploadSpec uploadSpec = getBlueprintUploadSpec()) {
                 blueprint = uploadSpec.upload(blueprintsClient, blueprintId);
             }
+            logger.println(String.format("Blueprint '%s' uploaded", blueprintId));
         }
 
         String envDataLocation = CloudifyPluginUtilities.expandString(envVars, this.envDataLocation);
-        CloudifyPluginUtilities.createEnvironment(
-                listener, workspace, cloudifyClient,
-                blueprint.getId(), deploymentId, operationInputs, envDataLocation,
-                echoInputs, echoEnvData, debugOutput);
+        CloudifyPluginUtilities.createEnvironment(listener, workspace, cloudifyClient, blueprint.getId(), deploymentId,
+                operationInputs, envDataLocation, false, echoInputs, echoEnvData, debugOutput,
+                inputPrintPredicate != null ? inputPrintPredicate : x -> true);
     }
 
-    protected void putIfNonNullValue(final Map<String, Object> map, final String key, final String value) {
+    protected void putIfNonNullValue(final Map<String, Object> map, final String key, final Object value) {
         if (value != null) {
             map.put(key, value);
         }
@@ -115,13 +126,12 @@ public abstract class IntegrationBuildStep extends CloudifyBuildStep {
 
     protected abstract String getIntegrationName();
 
-    protected abstract String getIntegrationVersion();
-
     /**
-     * @return A generated blueprint ID. May be overridden by subclasses for specialized implementations.
+     * @return A generated blueprint ID. May be overridden by subclasses for
+     *         specialized implementations.
      */
     protected String generateBlueprintId() {
-        return String.format("cfy-jenkins-%s-%s", getIntegrationName(), getIntegrationVersion());
+        return INTEGRATION_BUNDLE.getString(String.format("integration.%s.blueprint-id", getIntegrationName()));
     }
 
     @Override

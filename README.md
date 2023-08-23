@@ -1,11 +1,25 @@
 # Jenkins Plugin for Cloudify
 
-This module provides tight integration between Jenkins and Cloudify, simplifying using
-Cloudify Manager through Jenkins jobs and pipelines.
+Provides tight integration between Jenkins and Cloudify.
 
-For more information, refer to the following presentation and video: https://docs.google.com/presentation/d/1f4zcKQhV0Us7jA8s7z7-VarDxaTZaAQqr1sMrwABGVo
+The plugin integrates with popular infrastructure automation toolchains, providing a consistent way to manage all environments through a single Jenkins plugin.
+It includes build steps and examples that provide seamless integration with AWS CloudFormation, Azure ARM, Terraform, Ansible and Kubernetes (including GKE, EKS, and AKS), as well as OpenShift and KubeSpray.
 
-* [Prerequisites](#prerequisites)
+![Jenkins Plugin for Cloudify](static/jenkins-plugin.png)
+
+Cloudify users can use the plugin to call Cloudify API through fine-grained build steps, saving the need to use explicit REST calls or custom scripts to refer to Cloudify Manager,
+greatly simplifying the use of Cloudify Manager through Jenkins jobs and pipelines.
+
+For more information, as well as a live demo, see: [https://cloudify.co/Jenkins](https://cloudify.co/Jenkins)
+
+To download Cloudify Community Edition (for CentOS / RHEL), refer to: [https://docs.cloudify.co/staging/dev/trial_getting_started/set_trial_manager/download_community/](https://docs.cloudify.co/staging/dev/trial_getting_started/set_trial_manager/download_community/)
+
+To download Cloudify Community Edition's Docker image: [https://hub.docker.com/r/cloudifyplatform/community](https://hub.docker.com/r/cloudifyplatform/community)
+
+To learn more about Cloudify: [https://cloudify.co](https://cloudify.co) 
+
+## Table of Contents
+
 * [Examples](#examples)
 * [Terminology](#terminology)
     * [Deployment Outputs File](#deployment-outputs-file)
@@ -24,15 +38,12 @@ For more information, refer to the following presentation and video: https://doc
     * [Execute Cloudify Workflow](#execute-cloudify-workflow)
     * [Convert Cloudify Environment Outputs/Capabilities to Inputs](#convert-cloudify-environment-outputs-capabilities-to-inputs)
 * [Available Build Steps: Provisioners and Orchestrators](#available-build-steps-provisioners-and-orchestrators)
+    * [Create Kubernetes Resources](#create-kubernetes-resources)
     * [Run Ansible Playbook](#run-ansible-playbook)
     * [Create Azure ARM Deployment](#create-azure-arm-deployment)
     * [Create CloudFormation Stack](#create-cloudformation-stack)
     * [Apply Terraform Module](#apply-terraform-module)
 * [Cloudify's Build Wrapper](#cloudify-s-build-wrapper)
-
-## Prerequisites
-
-Jenkins version: 2.204.1+
 
 ## Examples
 
@@ -42,13 +53,13 @@ You can find them in [examples/jobs](examples/jobs).
 To import these definitions into Jenkins, use the Jenkins CLI. For example:
 
 ```bash
-java -jar jenkins-cli.jar -s <jenkins_url> create-job <job_name> < path_to_job_xml_file 
+java -jar jenkins-cli.jar -s <jenkins_url> create-job <job_name> < path_to_job_xml_file
 ```
 
 For example:
 
 ```bash
-java -jar jenkins-cli.jar -s <jenkins_url> create-job <job_name> < examples/jobs/cloudify-wrapper-with-git.xml 
+java -jar jenkins-cli.jar -s <jenkins_url> create-job <job_name> < examples/jobs/cloudify-wrapper-with-git.xml
 ```
 
 ## Terminology
@@ -200,7 +211,7 @@ withCredentials([usernamePassword(credentialsId: "${params.cfy_credentials}", us
         ...
 }
 ```
- 
+
 ## Available Build Steps: Basic
 
 ### Upload Cloudify Plugin
@@ -243,12 +254,49 @@ Use this build-step to transform a Deployment Outputs File to a standard Deploym
 The plugin provides build-steps to facilitate the usage of popular provisioners and orchestrators, allowing
 job/pipeline authors to use such tools through Cloudify in a seamless manner.
 
+### Create Kubernetes Resources
+
+This build step receives a Kubernetes application definition, along with context parameters, and runs it using
+Cloudify's official Kubernetes plugin.
+
+#### Prerequisites
+
+* Cloudify's Kubernetes Plugin installed on Cloudify Manager
+
+#### Authentication
+
+The Kubernetes build step is flexible to accommodate two methods of authenticating to Kubernetes:
+
+* Using a token
+* Using GCP Service Account credentials
+
+**In order to use a token**, there are two options:
+
+* Providing the ID of a Jenkins credential entry to the "API Key Credentials ID" / "`apiKeycredentialsId`" parameter. The credentials entry must either be of type "string" ("Secret Text") or type "file" ("Secret File").
+
+* Providing the path to a file containing the token. The path must be relative to the Jenkins workspace root.
+
+**In order to use a GCP Service Account**, there are two options:
+
+* Providing the ID of a Jenkins credential entry to the "GCP Credentials ID" / "`gcpCredentialsId`"
+parameter. The credentials entry must either be of type "string" ("Secret Text") or type "file" ("Secret File").
+
+* Providing the path to a YAML/JSON file containing the service account details. The path must be relative to the Jenkins workspace root.
+
+#### Kubernetes Connection
+
+At a minimum, you should provide a value to the "Kubernetes Master" / "`k8sMaster`" parameter, pointing at the
+Kubernetes Master.
+
+In addition, you can provide additional parameters to control the connection to the Kubernetes Master, such as SSL
+parameters.
+
 ### Run Ansible Playbook
 
 This build step receives the path / URL of an Ansible playbook, along with other context parameters, and runs it using
 Cloudify's official Ansible plugin.
 
-Prerequisites:
+#### Prerequisites
 
 * Cloudify's Ansible Plugin installed on Cloudify Manager
 
@@ -257,20 +305,16 @@ Prerequisites:
 This build step receives the path / URL of an Azure ARM template, and template parameters. The template is then
 deployed on Azure, using Cloudify's Azure plugin.
 
-*Prerequisites:*
+#### Prerequisites
 
 * Cloudify's Azure Plugin installed on Cloudify Manager
 
-*Notes:*
+#### Usage
 
 Certain parameters may be omitted, in which case the value will default to Cloudify secrets:
 
 | Omitted Value   | Cloudify Secret Used as Default |
 |-----------------|---------------------------------|
-| Subscription ID | `azure_subscription_id`      |
-| Tenant ID       | `azure_tenant_id`             |
-| Client ID       | `azure_client_id`             |
-| Client Secret   | `azure_client_secret`        |
 | Location        | `azure_default_location`     |
 
 ### Create CloudFormation Stack
@@ -278,18 +322,16 @@ Certain parameters may be omitted, in which case the value will default to Cloud
 This build step receives the path / URL of an AWS CloudFormation template, as well as template parameters,
 and creates a CloudFormation Stack off it, using Cloudify's AWS plugin.
 
-Prerequisites:
+#### Prerequisites
 
 * Cloudify's AWS Plugin installed on Cloudify Manager
 
-*Notes:*
+#### Usage
 
 Certain parameters may be omitted, in which case the value will default to Cloudify secrets:
 
 | Omitted Value     | Cloudify Secret Used as Default |
 |-------------------|---------------------------------|
-| Access Key ID     | `aws_access_key_id`           |
-| Secret Access Key | `aws_secret_access_key`      |
 | Region Name       | `aws_region_name`             |
 
 ### Apply Terraform Module
@@ -297,12 +339,12 @@ Certain parameters may be omitted, in which case the value will default to Cloud
 This build step receives the path / URL of a Terraform module, as well as module variables, and
 applies the module, using Cloudify's Terraform plugin.
 
-Prerequisites:
+#### Prerequisites
 
 * Cloudify's Terraform Plugin installed on Cloudify Manager
-* Terraform installed 
+* Terraform installed
 
-*Notes:*
+#### Usage
 
 Certain parameters may be omitted, in which case the value will default to Cloudify secrets:
 
@@ -311,7 +353,7 @@ Certain parameters may be omitted, in which case the value will default to Cloud
 | Terraform Executable        | `terraform_executable`       |
 | Terraform Plugins Directory | `terraform_plugins_dir`      |
 | Terraform Storage Directory | `terraform_storage_dir`      |
- 
+
 ## Cloudify's Build Wrapper
 
 The Cloudify Plugin for Jenkins also provides a Jenkins *Build Wrapper*. The wrapper provides a convenience

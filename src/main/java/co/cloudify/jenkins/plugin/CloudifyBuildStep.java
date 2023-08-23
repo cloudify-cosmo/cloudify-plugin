@@ -48,11 +48,12 @@ public abstract class CloudifyBuildStep extends Builder implements SimpleBuildSt
     }
 
     /**
-     * By default, a Cloudifys step requires a {@link CloudifyClient} instance to operate.
-     * Otherwise, the step should override this method to return <code>false</code>.
+     * By default, a Cloudify step requires a {@link CloudifyClient} instance to
+     * operate. Otherwise, the step should override this method to return
+     * <code>false</code>.
      * 
-     * @return <code>true</code> If a {@link CloudifyClient} instance should
-     *         be prepared and passed to the actual step.
+     * @return <code>true</code> If a {@link CloudifyClient} instance should be
+     *         prepared and passed to the actual step.
      */
     protected boolean isCloudifyClientRequired() {
         return true;
@@ -64,9 +65,11 @@ public abstract class CloudifyBuildStep extends Builder implements SimpleBuildSt
      * need not worry about using the listener, or handle top-level exceptions; this
      * is done by the wrapper.
      * 
-     * @param build          build object, as given by Jenkins
+     * @param run            build object, as given by Jenkins
      * @param launcher       launcher object, as given by Jenkins
      * @param listener       listener object, as given by Jenkins
+     * @param workspace      path to Jenkins workspace
+     * @param envVars        build's environment variables
      * @param cloudifyClient a {@link CloudifyClient} instance pointing at the
      *                       Cloudify Manager installation, populated during
      *                       configuration
@@ -74,8 +77,8 @@ public abstract class CloudifyBuildStep extends Builder implements SimpleBuildSt
      * @throws Exception May be anything; unified handling is done in
      *                   {@link #perform(AbstractBuild, Launcher, BuildListener)}
      */
-    protected abstract void performImpl(Run<?, ?> run, Launcher launcher, TaskListener listener,
-            FilePath workspace, EnvVars envVars, CloudifyClient cloudifyClient) throws Exception;
+    protected abstract void performImpl(Run<?, ?> run, Launcher launcher, TaskListener listener, FilePath workspace,
+            EnvVars envVars, CloudifyClient cloudifyClient) throws Exception;
 
     private CloudifyClient getCloudifyClient(final Run<?, ?> run) throws AbortException {
         if (!isCloudifyClientRequired()) {
@@ -86,12 +89,11 @@ public abstract class CloudifyBuildStep extends Builder implements SimpleBuildSt
             throw new AbortException("Neither credentialsId nor username/password were provided");
         }
 
-        StandardUsernamePasswordCredentials creds = CloudifyPluginUtilities.getCredentials(credentialsId, run);
+        StandardUsernamePasswordCredentials creds = CloudifyPluginUtilities
+                .getUsernamePasswordCredentials(credentialsId, run);
 
-        return CloudifyConfiguration.getCloudifyClient(
-                StringUtils.trimToNull(creds.getUsername()),
-                StringUtils.trimToNull(creds.getPassword().getPlainText()),
-                StringUtils.trimToNull(tenant));
+        return CloudifyConfiguration.getCloudifyClient(StringUtils.trimToNull(creds.getUsername()),
+                StringUtils.trimToNull(creds.getPassword().getPlainText()), StringUtils.trimToNull(tenant));
     }
 
     @Override
@@ -110,9 +112,6 @@ public abstract class CloudifyBuildStep extends Builder implements SimpleBuildSt
 
     @Override
     public String toString() {
-        return new ToStringBuilder(this)
-                .append("credentialsId", credentialsId)
-                .append("tenant", tenant)
-                .toString();
+        return new ToStringBuilder(this).append("credentialsId", credentialsId).append("tenant", tenant).toString();
     }
 }

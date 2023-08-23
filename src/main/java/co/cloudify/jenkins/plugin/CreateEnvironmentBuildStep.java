@@ -33,6 +33,7 @@ public class CreateEnvironmentBuildStep extends CloudifyBuildStep {
     private String mapping;
     private String mappingFile;
     private String outputFile;
+    private boolean skipInstall;
     private boolean echoInputs;
     private boolean echoOutputs;
     private boolean debugOutput;
@@ -105,6 +106,15 @@ public class CreateEnvironmentBuildStep extends CloudifyBuildStep {
         this.outputFile = outputFile;
     }
 
+    public boolean isSkipInstall() {
+        return skipInstall;
+    }
+
+    @DataBoundSetter
+    public void setSkipInstall(boolean skipInstall) {
+        this.skipInstall = skipInstall;
+    }
+
     public boolean isEchoInputs() {
         return echoInputs;
     }
@@ -134,9 +144,7 @@ public class CreateEnvironmentBuildStep extends CloudifyBuildStep {
 
     @Override
     protected void performImpl(final Run<?, ?> run, final Launcher launcher, final TaskListener listener,
-            final FilePath workspace,
-            final EnvVars envVars,
-            final CloudifyClient cloudifyClient) throws Exception {
+            final FilePath workspace, final EnvVars envVars, final CloudifyClient cloudifyClient) throws Exception {
         String blueprintId = CloudifyPluginUtilities.expandString(envVars, this.blueprintId);
         String deploymentId = CloudifyPluginUtilities.expandString(envVars, this.deploymentId);
         String inputs = CloudifyPluginUtilities.expandString(envVars, this.inputs);
@@ -150,9 +158,9 @@ public class CreateEnvironmentBuildStep extends CloudifyBuildStep {
         action.setDeploymentId(deploymentId);
         run.addOrReplaceAction(action);
 
-        CloudifyEnvironmentData envData = CloudifyPluginUtilities.createEnvironment(
-                listener, workspace, cloudifyClient, blueprintId, deploymentId, inputs, inputsFile,
-                mapping, mappingFile, outputFile, echoInputs, echoOutputs, debugOutput);
+        CloudifyEnvironmentData envData = CloudifyPluginUtilities.createEnvironment(listener, workspace, cloudifyClient,
+                blueprintId, deploymentId, inputs, inputsFile, mapping, mappingFile, outputFile, skipInstall,
+                echoInputs, echoOutputs, debugOutput, x -> true);
         action.applyEnvironmentData(envData);
     }
 
@@ -202,18 +210,10 @@ public class CreateEnvironmentBuildStep extends CloudifyBuildStep {
 
     @Override
     public String toString() {
-        return new ToStringBuilder(this)
-                .appendSuper(super.toString())
-                .append("blueprintId", blueprintId)
-                .append("deploymentId", deploymentId)
-                .append("inputs", inputs)
-                .append("inputsFile", inputsFile)
-                .append("mapping", mapping)
-                .append("mappingFile", mappingFile)
-                .append("outputFile", outputFile)
-                .append("echoInputs", echoInputs)
-                .append("echoOutputs", echoOutputs)
-                .append("debugOutput", debugOutput)
-                .toString();
+        return new ToStringBuilder(this).appendSuper(super.toString()).append("blueprintId", blueprintId)
+                .append("deploymentId", deploymentId).append("inputs", inputs).append("inputsFile", inputsFile)
+                .append("mapping", mapping).append("mappingFile", mappingFile).append("outputFile", outputFile)
+                .append("skipInstall", skipInstall).append("echoInputs", echoInputs).append("echoOutputs", echoOutputs)
+                .append("debugOutput", debugOutput).toString();
     }
 }
